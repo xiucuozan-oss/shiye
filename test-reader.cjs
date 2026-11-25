@@ -1,0 +1,9 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const els=new Map();function el(id){if(!els.has(id))els.set(id,{value:'',addEventListener(){},setAttribute(){},querySelectorAll(){return[]},classList:{add(){},remove(){}}});return els.get(id)}
+let code=fs.readFileSync('public/library/app.js','utf8');code=code.slice(0,code.lastIndexOf('(async()=>'));const context=vm.createContext({document:{getElementById:el,addEventListener(){}},window:{addEventListener(){}},crypto:require('node:crypto').webcrypto,URL,console,structuredClone,Date,setTimeout,clearTimeout});vm.runInContext(code,context);vm.runInContext(fs.readFileSync('public/library/reader.js','utf8'),context);const run=s=>vm.runInContext(s,context);
+run(`reading={...blank(),text:'第一段文字第二段文字',annotations:[{id:'a',block:0,start:0,end:3,quote:'第一段',style:'underline'}]}`);assert(run(`markedText(reading.text,0)`).includes('mark-underline'));assert.doesNotThrow(()=>run('validateArticleData(reading)'));
+assert.throws(()=>run(`validateArticleData({...reading,annotations:[{...reading.annotations[0],end:999}]})`));
+const old=run('({...blank()})');delete old.annotations;delete old.article;context.old=old;assert.equal(run(`validateBackup({app:'shiye',version:1,entries:[old]})[0].annotations.length`),0);
+run(`reading.article={blocks:[{type:'text',text:reading.text}],author:'测试',status:'complete',warnings:[],importedAt:Date.now()}`);assert.equal(run(`validateBackup({app:'shiye',version:1,entries:[reading]})[0].annotations[0].quote`),'第一段');
+assert.throws(()=>run(`validateArticleData({...reading,article:{...reading.article,blocks:[{type:'image',image:100}]}})`));
+console.log('PASS reader: annotation anchors, HTML rendering, invalid ranges/images, old backup migration, article+annotation backup roundtrip');

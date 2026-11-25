@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {extractHTML,allowedURL,parseState,imageMime,importArticle} from './lib/extract.mjs';
+assert.throws(()=>allowedURL('https://127.0.0.1/'));assert.throws(()=>allowedURL('https://www.xiaohongshu.com.attacker.com/'));assert.throws(()=>allowedURL('https://u:p@mp.weixin.qq.com/'));assert.throws(()=>allowedURL('https://www.xiaohongshu.com:8443/'));assert.throws(()=>allowedURL('file:///etc/passwd'));assert.throws(()=>allowedURL('https://example.com/image',true));
+assert.deepEqual(parseState('{"text":"undefined is a word","a":undefined}'),{text:'undefined is a word',a:null});
+const note={title:'测试笔记',desc:'第一段\n第二段',user:{nickname:'作者'},imageList:[{urlDefault:'http://sns-webpic-qc.xhscdn.com/one'}]};
+const html='<script>window.__INITIAL_STATE__='+JSON.stringify({note:{noteDetailMap:{abc:{note}}}})+'</script>';
+const x=extractHTML(html,'https://www.xiaohongshu.com/explore/abc');assert.equal(x.title,'测试笔记');assert.equal(x.imageURLs[0],'https://sns-webpic-qc.xhscdn.com/one');assert.equal(x.blocks.length,2);
+assert.throws(()=>extractHTML('<title>登录</title>','https://www.xiaohongshu.com/login'));
+const w=extractHTML('<h1 id="activity-name">微信文章</h1><div id="js_content"><p>前文</p><img data-src="https://mmbiz.qpic.cn/a"><p>后文</p><script>bad()</script></div>','https://mp.weixin.qq.com/s/test');assert.deepEqual(w.blocks.map(b=>b.type),['text','image','text']);assert(!JSON.stringify(w).includes('bad()'));
+assert.throws(()=>imageMime(new TextEncoder().encode('<svg onload=bad()>'),'image/svg+xml'));
+const originalFetch=globalThis.fetch;
+globalThis.fetch=async url=>String(url).includes('xhscdn')?new Response('denied',{status:403}):new Response(html,{headers:{'content-type':'text/html'}});
+const partial=await importArticle('https://www.xiaohongshu.com/explore/abc');assert.equal(partial.article.status,'partial');assert.equal(partial.images.length,0);assert.equal(partial.article.blocks[1].type,'missing');assert.equal(partial.warnings.length,1);
+globalThis.fetch=originalFetch;
+console.log('PASS extractor: host restrictions, data-only state parsing, image order, rejected login pages, active-content removal, missing-image reporting');
